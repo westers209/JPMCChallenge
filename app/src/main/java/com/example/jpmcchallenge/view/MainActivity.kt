@@ -7,10 +7,8 @@ import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
 import android.widget.Toast
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
 import com.example.jpmcchallenge.data.ApiResponse
 import com.example.jpmcchallenge.data.ApiStatus
@@ -38,6 +36,7 @@ class MainActivity : AppCompatActivity() {
         val sp = getSharedPreferences("key", 0)
         val savedCity = sp.getString("cityName", "")
 
+        // Load previously searched city. If the user has never searched then use their current location instead
         if(savedCity != ""){
             binding.etSearch.setText(savedCity)
             viewModel.getWeather(savedCity).observe(this) {
@@ -47,6 +46,7 @@ class MainActivity : AppCompatActivity() {
             getLocationFromNetwork(viewModel)
         }
 
+        // Saves searched city to shared preferences and fetches the city's weather data
         binding.btnSearch.setOnClickListener {
             // Save new city to shared preference
             val sedt = sp.edit()
@@ -62,45 +62,39 @@ class MainActivity : AppCompatActivity() {
     private fun getLocationFromNetwork(viewModel: WeatherViewModel) {
         val locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
         val hasNetwork = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
-        val networkLocationListener = LocationListener{}
         if(hasNetwork){
             if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-                locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 5000, 0F, networkLocationListener)
-                val lastKnownLocationByNetwork = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
-                lastKnownLocationByNetwork.let {
-                    val format = DecimalFormat("##.####")
-                    lat = it?.latitude
-                    lon = it?.longitude
-                    val roundedLat = format.format(lat)
-                    val roundedLon = format.format(lon)
-                    convertLatLon(roundedLat, roundedLon, viewModel)
-                }
+                getLatLon(viewModel)
             } else {
                 ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION) ,1) //request it
             }
         }
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+    private fun getLatLon(viewModel: WeatherViewModel) {
         val locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
         val networkLocationListener = LocationListener{}
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 5000, 0F, networkLocationListener)
+            val lastKnownLocationByNetwork = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+            lastKnownLocationByNetwork.let {
+                val format = DecimalFormat("##.####")
+                lat = it?.latitude
+                lon = it?.longitude
+                val roundedLat = format.format(lat)
+                val roundedLon = format.format(lon)
+                convertLatLon(roundedLat, roundedLon, viewModel)
+            }
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         val viewModel = ViewModelProvider(this)[WeatherViewModel::class.java]
         when (requestCode) {
             1 -> {
                 if ((grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)) {
-                    if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-                    locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 5000, 0F, networkLocationListener)
-                    val lastKnownLocationByNetwork = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
-                    lastKnownLocationByNetwork.let {
-                        val format = DecimalFormat("##.####")
-                        lat = it?.latitude
-                        lon = it?.longitude
-                        val roundedLat = format.format(lat)
-                        val roundedLon = format.format(lon)
-                        convertLatLon(roundedLat, roundedLon, viewModel)
-                    }
-                }
+                    getLatLon(viewModel)
                 } else {
                     Toast.makeText(this,"No Location Permission",Toast.LENGTH_SHORT).show()
                 }
